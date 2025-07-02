@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>English Battle</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+        #game-area {
+            display: none;
+        }
+        #word {
+            font-size: 24px;
+            margin: 20px 0;
+        }
+        .translation-option {
+            display: inline-block;
+            margin: 10px;
+            padding: 10px 20px;
+            background-color: #f0f0f0;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .translation-option:hover {
+            background-color: #e0e0e0;
+        }
+        #scores {
+            margin: 20px 0;
+            font-size: 18px;
+        }
+        #waiting {
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>English Battle</h1>
+
+    <button id="find-game">Find Game</button>
+
+    <div id="waiting" style="display: none;">
+        <p>Waiting for an opponent...</p>
+    </div>
+
+    <div id="game-area">
+        <div id="word"></div>
+        <div id="translations"></div>
+        <div id="scores">
+            You: <span id="your-score">0</span> |
+            Opponent: <span id="opponent-score">0</span>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+
+        document.getElementById('find-game').addEventListener('click', () => {
+            socket.emit('find_game');
+            document.getElementById('find-game').style.display = 'none';
+            document.getElementById('waiting').style.display = 'block';
+        });
+
+        socket.on('game_start', (data) => {
+            document.getElementById('waiting').style.display = 'none';
+            document.getElementById('game-area').style.display = 'block';
+
+            updateWordAndTranslations(data.word, data.translations);
+        });
+
+        socket.on('new_round', (data) => {
+            updateWordAndTranslations(data.word, data.translations);
+        });
+
+        socket.on('answer_result', (data) => {
+            document.getElementById('your-score').textContent = data.your_score;
+            document.getElementById('opponent-score').textContent = data.opponent_score;
+
+            if (data.correct) {
+                alert('Correct! The answer was: ' + data.correct_answer);
+            } else {
+                alert('Wrong! The correct answer was: ' + data.correct_answer);
+            }
+        });
+
+        socket.on('opponent_disconnected', () => {
+            alert('Your opponent has disconnected. Returning to main menu.');
+            resetGame();
+        });
+
+        function updateWordAndTranslations(word, translations) {
+            document.getElementById('word').textContent = word;
+
+            const translationsContainer = document.getElementById('translations');
+            translationsContainer.innerHTML = '';
+
+            translations.forEach(translation => {
+                const option = document.createElement('div');
+                option.className = 'translation-option';
+                option.textContent = translation;
+                option.addEventListener('click', () => {
+                    socket.emit('answer', { answer: translation });
+                });
+                translationsContainer.appendChild(option);
+            });
+        }
+
+        function resetGame() {
+            document.getElementById('game-area').style.display = 'none';
+            document.getElementById('waiting').style.display = 'none';
+            document.getElementById('find-game').style.display = 'block';
+            document.getElementById('your-score').textContent = '0';
+            document.getElementById('opponent-score').textContent = '0';
+        }
+    </script>
+</body>
+</html>
