@@ -1,123 +1,158 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>English Battle</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 20px;
-            text-align: center;
-        }
-        #game-area {
-            display: none;
-        }
-        #word {
-            font-size: 24px;
-            margin: 20px 0;
-        }
-        .translation-option {
-            display: inline-block;
-            margin: 10px;
-            padding: 10px 20px;
-            background-color: #f0f0f0;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-        .translation-option:hover {
-            background-color: #e0e0e0;
-        }
-        #scores {
-            margin: 20px 0;
-            font-size: 18px;
-        }
-        #waiting {
-            margin: 20px 0;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>English Battle</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <style>
+    .fade-message {
+      transition: opacity 0.5s ease;
+    }
+  </style>
 </head>
-<body>
-    <h1>English Battle</h1>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+  <div class="bg-white p-8 rounded-xl shadow-lg max-w-md w-full text-center">
+    <h1 class="text-3xl font-bold mb-6 text-indigo-600">🧠 English Battle</h1>
 
-    <button id="find-game">Find Game</button>
+    <button id="find-game" class="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition">
+      🔍 Найти соперника
+    </button>
 
-    <div id="waiting" style="display: none;">
-        <p>Waiting for an opponent...</p>
+    <div id="waiting" class="mt-4 text-gray-600 hidden">
+      ⏳ Ожидание соперника...
     </div>
 
-    <div id="game-area">
-        <div id="word"></div>
-        <div id="translations"></div>
-        <div id="scores">
-            You: <span id="your-score">0</span> |
-            Opponent: <span id="opponent-score">0</span>
-        </div>
+    <div id="game-area" class="mt-6 hidden">
+      <div id="word" class="text-2xl font-semibold text-gray-800 mb-4"></div>
+
+      <div id="translations" class="grid grid-cols-2 gap-4 mb-4"></div>
+
+      <div id="feedback" class="fade-message text-lg font-medium mb-2 hidden"></div>
+
+      <div id="scores" class="text-lg text-gray-700 mb-2">
+        🧍‍♂️ Ты: <span id="your-score" class="font-bold">0</span> |
+        🧍‍♂️ Соперник: <span id="opponent-score" class="font-bold">0</span>
+      </div>
+
+      <div id="game-over" class="text-xl font-bold text-indigo-700 hidden"></div>
     </div>
+  </div>
 
-    <script>
-        const socket = io();
+  <script>
+    const socket = io();
+    const MAX_SCORE = 15;
+    let canAnswer = true;
+    let correctAnswerGlobal = null;
 
-        document.getElementById('find-game').addEventListener('click', () => {
-            socket.emit('find_game');
-            document.getElementById('find-game').style.display = 'none';
-            document.getElementById('waiting').style.display = 'block';
-        });
+    document.getElementById('find-game').addEventListener('click', () => {
+      socket.emit('find_game');
+      document.getElementById('find-game').style.display = 'none';
+      document.getElementById('waiting').style.display = 'block';
+    });
 
-        socket.on('game_start', (data) => {
-            document.getElementById('waiting').style.display = 'none';
-            document.getElementById('game-area').style.display = 'block';
+    socket.on('game_start', (data) => {
+      document.getElementById('waiting').style.display = 'none';
+      document.getElementById('game-area').style.display = 'block';
+      updateWordAndTranslations(data.word, data.translations);
+    });
 
-            updateWordAndTranslations(data.word, data.translations);
-        });
+    socket.on('new_round', (data) => {
+      updateWordAndTranslations(data.word, data.translations);
+      document.getElementById('feedback').classList.add('hidden');
+      canAnswer = true;
+      correctAnswerGlobal = null;
+    });
 
-        socket.on('new_round', (data) => {
-            updateWordAndTranslations(data.word, data.translations);
-        });
+    socket.on('answer_result', (data) => {
+      if (!canAnswer) return;
 
-        socket.on('answer_result', (data) => {
-            document.getElementById('your-score').textContent = data.your_score;
-            document.getElementById('opponent-score').textContent = data.opponent_score;
+      canAnswer = false;
+      document.getElementById('your-score').textContent = data.your_score;
+      document.getElementById('opponent-score').textContent = data.opponent_score;
+      correctAnswerGlobal = data.correct_answer;
 
-            if (data.correct) {
-                alert('Correct! The answer was: ' + data.correct_answer);
-            } else {
-                alert('Wrong! The correct answer was: ' + data.correct_answer);
-            }
-        });
+      showFeedback(data.correct, data.correct_answer);
+      styleAnswerButtons(data.correct);
 
-        socket.on('opponent_disconnected', () => {
-            alert('Your opponent has disconnected. Returning to main menu.');
-            resetGame();
-        });
+      if (data.your_score >= MAX_SCORE || data.opponent_score >= MAX_SCORE) {
+        endGame(data.your_score >= MAX_SCORE ? 'Ты победил!' : 'Победил соперник!');
+      }
+    });
 
-        function updateWordAndTranslations(word, translations) {
-            document.getElementById('word').textContent = word;
+    socket.on('opponent_disconnected', () => {
+      alert('🚫 Соперник отключился. Возврат в главное меню.');
+      resetGame();
+    });
 
-            const translationsContainer = document.getElementById('translations');
-            translationsContainer.innerHTML = '';
+    function updateWordAndTranslations(word, translations) {
+      document.getElementById('word').textContent = `🔤 ${word}`;
 
-            translations.forEach(translation => {
-                const option = document.createElement('div');
-                option.className = 'translation-option';
-                option.textContent = translation;
-                option.addEventListener('click', () => {
-                    socket.emit('answer', { answer: translation });
-                });
-                translationsContainer.appendChild(option);
-            });
+      const container = document.getElementById('translations');
+      container.innerHTML = '';
+      translations.forEach(translation => {
+        const option = document.createElement('button');
+        option.textContent = translation;
+        option.className = 'bg-gray-200 hover:bg-gray-300 py-2 px-4 rounded-lg transition font-medium';
+        option.onclick = () => {
+          if (canAnswer) {
+            socket.emit('answer', { answer: translation });
+          }
+        };
+        container.appendChild(option);
+      });
+    }
+
+    function styleAnswerButtons(correct) {
+      const buttons = document.querySelectorAll('#translations button');
+      buttons.forEach(btn => {
+        btn.disabled = true;
+        btn.classList.add('opacity-60');
+
+        if (btn.textContent === correctAnswerGlobal) {
+          btn.classList.add('bg-green-300');
+        } else if (btn.textContent === btn.textContent && !correct) {
+          btn.classList.add('bg-red-300');
         }
+      });
+    }
 
-        function resetGame() {
-            document.getElementById('game-area').style.display = 'none';
-            document.getElementById('waiting').style.display = 'none';
-            document.getElementById('find-game').style.display = 'block';
-            document.getElementById('your-score').textContent = '0';
-            document.getElementById('opponent-score').textContent = '0';
-        }
-    </script>
+    function showFeedback(correct, answer) {
+      const feedback = document.getElementById('feedback');
+      feedback.textContent = correct
+        ? `✅ Верно! Ответ: ${answer}`
+        : `❌ Неверно! Правильный ответ: ${answer}`;
+      feedback.className = `fade-message ${correct ? 'text-green-600' : 'text-red-600'}`;
+      feedback.classList.remove('hidden');
+      feedback.style.opacity = 1;
+
+      setTimeout(() => {
+        feedback.style.opacity = 0;
+      }, 3000);
+    }
+
+    function endGame(message) {
+      const gameOver = document.getElementById('game-over');
+      gameOver.textContent = `🎉 ${message}`;
+      gameOver.classList.remove('hidden');
+
+      const buttons = document.querySelectorAll('#translations button');
+      buttons.forEach(btn => btn.disabled = true);
+
+      canAnswer = false;
+    }
+
+    function resetGame() {
+      document.getElementById('game-area').style.display = 'none';
+      document.getElementById('waiting').style.display = 'none';
+      document.getElementById('find-game').style.display = 'inline-block';
+      document.getElementById('your-score').textContent = '0';
+      document.getElementById('opponent-score').textContent = '0';
+      document.getElementById('feedback').classList.add('hidden');
+      document.getElementById('game-over').classList.add('hidden');
+      canAnswer = true;
+    }
+  </script>
 </body>
 </html>
