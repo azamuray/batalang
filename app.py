@@ -1,3 +1,6 @@
+import json
+from typing import Dict
+
 from flask import Flask, render_template, request
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import random
@@ -7,19 +10,16 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
 socketio = SocketIO(app)
 
+
+def get_words() -> Dict:
+    with open("words.json", "r") as file:
+        words = json.load(file)
+
+        return words
+
+
 # База данных слов: английское слово -> перевод
-WORDS = {
-    "apple": "яблоко",
-    "dog": "собака",
-    "cat": "кот",
-    "house": "дом",
-    "car": "машина",
-    "book": "книга",
-    "water": "вода",
-    "fire": "огонь",
-    "tree": "дерево",
-    "sun": "солнце"
-}
+WORDS = get_words()
 
 # Очередь ожидающих игроков
 waiting_players = []
@@ -73,7 +73,7 @@ def handle_find_game():
         # Выбираем случайное слово
         word, translation = random.choice(list(WORDS.items()))
         # Создаем варианты ответов
-        translations = list(WORDS.values())
+        translations = list(random.sample(list(WORDS.values()), 10))
         random.shuffle(translations)
         if translation not in translations[:3]:
             translations[3] = translation
@@ -142,7 +142,7 @@ def handle_answer(data):
         # Выбираем новое слово
         time.sleep(2)  # Пауза перед новым раундом
         word, translation = random.choice(list(WORDS.items()))
-        translations = list(WORDS.values())
+        translations = list(random.sample(list(WORDS.values()), 10))
         random.shuffle(translations)
         if translation not in translations[:3]:
             translations[3] = translation
