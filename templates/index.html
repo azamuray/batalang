@@ -13,7 +13,29 @@
   </style>
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center">
-  <div class="bg-white p-8 rounded-xl shadow-lg max-w-md w-full text-center">
+
+  <div id="auth-area" class="bg-white p-8 rounded-xl shadow-lg max-w-md w-full text-center hidden">
+    <h2 class="text-2xl font-bold mb-4 text-indigo-600">🔐 Вход / Регистрация</h2>
+
+    <input id="username" type="text" placeholder="Имя пользователя"
+           class="border p-2 rounded w-full mb-3" />
+    <input id="password" type="password" placeholder="Пароль"
+           class="border p-2 rounded w-full mb-3" />
+
+    <button id="auth-button"
+            class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 w-full">
+      🔓 Войти
+    </button>
+
+    <p class="mt-4 text-sm text-gray-600">
+      <span id="toggle-mode" class="text-indigo-500 cursor-pointer hover:underline">Нет аккаунта? Зарегистрироваться</span>
+    </p>
+
+    <p id="auth-error" class="text-red-600 mt-2 hidden"></p>
+  </div>
+
+<!--  <div class="bg-white p-8 rounded-xl shadow-lg max-w-md w-full text-center">-->
+  <div id="game-container" class="bg-white p-8 rounded-xl shadow-lg max-w-md w-full text-center">
     <h1 class="text-3xl font-bold mb-6 text-indigo-600">🧠 English Battle</h1>
 
     <button id="find-game" class="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition">
@@ -41,118 +63,62 @@
   </div>
 
   <script>
-    const socket = io();
-    const MAX_SCORE = 15;
-    let canAnswer = true;
-    let correctAnswerGlobal = null;
+    const authArea = document.getElementById('auth-area');
+    const gameContainer = document.getElementById('game-container');
+    const authButton = document.getElementById('auth-button');
+    const toggleMode = document.getElementById('toggle-mode');
+    const authError = document.getElementById('auth-error');
 
-    document.getElementById('find-game').addEventListener('click', () => {
-      socket.emit('find_game');
-      document.getElementById('find-game').style.display = 'none';
-      document.getElementById('waiting').style.display = 'block';
+    let mode = 'login'; // или 'register'
+
+    // Проверка токена
+    const token = localStorage.getItem('token');
+    if (!token) {
+      gameContainer.style.display = 'none';
+      authArea.classList.remove('hidden');
+    }
+
+    toggleMode.addEventListener('click', () => {
+      mode = mode === 'login' ? 'register' : 'login';
+      toggleMode.textContent = mode === 'login'
+        ? 'Нет аккаунта? Зарегистрироваться'
+        : 'Уже есть аккаунт? Войти';
+      authButton.textContent = mode === 'login' ? '🔓 Войти' : '📝 Зарегистрироваться';
     });
 
-    socket.on('game_start', (data) => {
-      document.getElementById('waiting').style.display = 'none';
-      document.getElementById('game-area').style.display = 'block';
-      updateWordAndTranslations(data.word, data.translations);
-    });
+    authButton.addEventListener('click', async () => {
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
 
-    socket.on('new_round', (data) => {
-      updateWordAndTranslations(data.word, data.translations);
-      document.getElementById('feedback').classList.add('hidden');
-      canAnswer = true;
-      correctAnswerGlobal = null;
-    });
+      if (!username || !password) {
+        authError.textContent = 'Введите имя и пароль.';
+        authError.classList.remove('hidden');
+        return;
+      }
 
-    socket.on('answer_result', (data) => {
-      if (!canAnswer) return;
+      try {
+        const res = await fetch(`/auth/${mode}`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({username, password})
+        });
 
-      canAnswer = false;
-      document.getElementById('your-score').textContent = data.your_score;
-      document.getElementById('opponent-score').textContent = data.opponent_score;
-      correctAnswerGlobal = data.correct_answer;
+        const data = await res.json();
 
-      showFeedback(data.correct, data.correct_answer);
-      styleAnswerButtons(data.correct);
-
-      if (data.your_score >= MAX_SCORE || data.opponent_score >= MAX_SCORE) {
-        endGame(data.your_score >= MAX_SCORE ? 'Ты победил!' : 'Победил соперник!');
+        if (res.ok && data.access_token) {
+          localStorage.setItem('token', data.access_token);
+          location.reload(); // Перезагружаем, чтобы отобразилась игра
+        } else {
+          authError.textContent = data.message || 'Ошибка авторизации.';
+          authError.classList.remove('hidden');
+        }
+      } catch (err) {
+        authError.textContent = 'Ошибка подключения.';
+        authError.classList.remove('hidden');
       }
     });
-
-    socket.on('opponent_disconnected', () => {
-      alert('🚫 Соперник отключился. Возврат в главное меню.');
-      resetGame();
-    });
-
-    function updateWordAndTranslations(word, translations) {
-      document.getElementById('word').textContent = `🔤 ${word}`;
-
-      const container = document.getElementById('translations');
-      container.innerHTML = '';
-      translations.forEach(translation => {
-        const option = document.createElement('button');
-        option.textContent = translation;
-        option.className = 'bg-gray-200 hover:bg-gray-300 py-2 px-4 rounded-lg transition font-medium';
-        option.onclick = () => {
-          if (canAnswer) {
-            socket.emit('answer', { answer: translation });
-          }
-        };
-        container.appendChild(option);
-      });
-    }
-
-    function styleAnswerButtons(correct) {
-      const buttons = document.querySelectorAll('#translations button');
-      buttons.forEach(btn => {
-        btn.disabled = true;
-        btn.classList.add('opacity-60');
-
-        if (btn.textContent === correctAnswerGlobal) {
-          btn.classList.add('bg-green-300');
-        } else if (btn.textContent === btn.textContent && !correct) {
-          btn.classList.add('bg-red-300');
-        }
-      });
-    }
-
-    function showFeedback(correct, answer) {
-      const feedback = document.getElementById('feedback');
-      feedback.textContent = correct
-        ? `✅ Верно! Ответ: ${answer}`
-        : `❌ Неверно! Правильный ответ: ${answer}`;
-      feedback.className = `fade-message ${correct ? 'text-green-600' : 'text-red-600'}`;
-      feedback.classList.remove('hidden');
-      feedback.style.opacity = 1;
-
-      setTimeout(() => {
-        feedback.style.opacity = 0;
-      }, 3000);
-    }
-
-    function endGame(message) {
-      const gameOver = document.getElementById('game-over');
-      gameOver.textContent = `🎉 ${message}`;
-      gameOver.classList.remove('hidden');
-
-      const buttons = document.querySelectorAll('#translations button');
-      buttons.forEach(btn => btn.disabled = true);
-
-      canAnswer = false;
-    }
-
-    function resetGame() {
-      document.getElementById('game-area').style.display = 'none';
-      document.getElementById('waiting').style.display = 'none';
-      document.getElementById('find-game').style.display = 'inline-block';
-      document.getElementById('your-score').textContent = '0';
-      document.getElementById('opponent-score').textContent = '0';
-      document.getElementById('feedback').classList.add('hidden');
-      document.getElementById('game-over').classList.add('hidden');
-      canAnswer = true;
-    }
   </script>
+
+
 </body>
 </html>
