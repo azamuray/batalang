@@ -1,24 +1,26 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Blueprint
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 import uuid
 
+db = SQLAlchemy()
+auth_bp = Blueprint('auth', __name__)
 
-db = SQLAlchemy()  # не передаём app сюда
+def create_app():
+    app = Flask(__name__)
+    CORS(app)
 
-app = Flask(__name__)
-CORS(app)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-db.init_app(app)
+    db.init_app(app)
 
+    with app.app_context():
+        db.create_all()
 
-# Создание таблиц сразу при запуске
-with app.app_context():
-    db.create_all()
-
+    app.register_blueprint(auth_bp, url_prefix="/auth")
+    return app
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -26,8 +28,7 @@ class User(db.Model):
     password_hash = db.Column(db.String(128), nullable=False)
     token = db.Column(db.String(120), unique=True, nullable=False)
 
-
-@app.route("/register", methods=["POST"])
+@auth_bp.route("/register", methods=["POST"])
 def register():
     data = request.json
     username = data.get("username")
@@ -47,7 +48,7 @@ def register():
 
     return jsonify({"message": "Registered successfully", "token": token})
 
-@app.route("/login", methods=["POST"])
+@auth_bp.route("/login", methods=["POST"])
 def login():
     data = request.json
     username = data.get("username")
