@@ -120,6 +120,33 @@ def handle_answer(data):
     if data['answer'] == correct_translation:
         # Игрок ответил правильно
         game['scores'][request.sid] += 1
+        print(f"Игрок {request.sid} ответил правильно. Текущий счет: {game['scores']}")
+        
+        # Проверяем, достиг ли кто-то 15 очков
+        if game['scores'][request.sid] >= 15:
+            print(f"Игра завершена! Победитель: {request.sid} с {game['scores'][request.sid]} очками")
+            # Игра завершена - победитель найден
+            winner = request.sid
+            loser = game['players'][0] if game['players'][1] == request.sid else game['players'][1]
+            
+            # Отправляем сообщение о завершении игры победителю
+            emit('game_over', {
+                'winner': True,
+                'message': 'Поздравляем! Вы победили!',
+                'final_scores': game['scores']
+            }, room=winner)
+            
+            # Отправляем сообщение о завершении игры проигравшему
+            emit('game_over', {
+                'winner': False,
+                'message': 'Игра окончена. Вы проиграли.',
+                'final_scores': game['scores']
+            }, room=loser)
+            
+            # Удаляем игру из активных
+            del active_games[room_id]
+            print(f"Игра {room_id} удалена из активных игр")
+            return
 
         # Отправляем результат
         emit('answer_result', {

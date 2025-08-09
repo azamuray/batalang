@@ -54,7 +54,12 @@
         🧍‍♂️ Соперник: <span id="opponent-score" class="font-bold">0</span>
       </div>
 
-      <div id="game-over" class="text-xl font-bold text-indigo-700 hidden"></div>
+      <div id="game-over" class="text-xl font-bold text-indigo-700 hidden">
+        <div class="mb-4"></div>
+        <button id="new-game-btn" class="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition">
+          🎮 Новая игра
+        </button>
+      </div>
     </div>
   </div>
 
@@ -154,6 +159,7 @@
     const opponentScoreSpan = document.getElementById('opponent-score');
     const feedbackDiv = document.getElementById('feedback');
     const gameOverDiv = document.getElementById('game-over');
+    const newGameBtn = document.getElementById('new-game-btn');
     const translationsDiv = document.getElementById('translations');
     const wordDiv = document.getElementById('word');
 
@@ -216,10 +222,26 @@
 
         showFeedback(data.correct, data.correct_answer);
         styleAnswerButtons(data.correct);
+      });
 
-        if (data.your_score >= MAX_SCORE || data.opponent_score >= MAX_SCORE) {
-          endGame(data.your_score >= MAX_SCORE ? 'Ты победил!' : 'Победил соперник!');
+      // Завершение игры
+      socket.on('game_over', (data) => {
+        canAnswer = false;
+        const buttons = translationsDiv.querySelectorAll('button');
+        buttons.forEach(btn => btn.disabled = true);
+        
+        if (data.winner) {
+          endGame('🎉 Поздравляем! Вы победили!');
+        } else {
+          endGame('😔 Игра окончена. Вы проиграли.');
         }
+        
+        // Показываем финальные счета
+        yourScoreSpan.textContent = data.final_scores[socket.id] || 0;
+        
+        // Находим счет соперника
+        const opponentId = Object.keys(data.final_scores).find(id => id !== socket.id);
+        opponentScoreSpan.textContent = opponentId ? data.final_scores[opponentId] : 0;
       });
 
       socket.on('game_error', (msg) => {
@@ -231,6 +253,12 @@
         alert('🚫 Соперник отключился. Возврат в главное меню.');
         resetGame();
       });
+
+      // Обработчик кнопки "Новая игра"
+      newGameBtn.onclick = () => {
+        resetGame();
+        findGameButton.click();
+      };
     }
 
     function updateWordAndTranslations(word, translations) {
@@ -293,6 +321,10 @@
       feedbackDiv.classList.add('hidden');
       gameOverDiv.classList.add('hidden');
       canAnswer = true;
+      
+      // Очищаем кнопки ответов
+      translationsDiv.innerHTML = '';
+      wordDiv.textContent = '';
     }
   </script>
 </body>
