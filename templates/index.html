@@ -220,8 +220,16 @@
         opponentScoreSpan.textContent = data.opponent_score;
         correctAnswerGlobal = data.correct_answer;
 
-        showFeedback(data.correct, data.correct_answer);
-        styleAnswerButtons(data.correct);
+        if (data.you_answered === false) {
+          // Оппонент ответил правильно, мы не отвечали — показать нейтральное уведомление
+          feedbackDiv.textContent = `⏱️ Раунд завершен. Правильный ответ: ${data.correct_answer}`;
+          feedbackDiv.className = 'fade-message text-gray-700';
+          feedbackDiv.classList.remove('hidden');
+          feedbackDiv.style.opacity = 1;
+        } else {
+          showFeedback(data.correct, data.correct_answer);
+          styleAnswerButtons(data.correct);
+        }
       });
 
       // Завершение игры

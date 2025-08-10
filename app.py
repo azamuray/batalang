@@ -173,16 +173,18 @@ def handle_answer(data):
             'your_score': game['scores'][request.sid],
             'opponent_score': game['scores'][game['players'][0]] if game['players'][1] == request.sid else
             game['scores'][game['players'][1]],
-            'correct_answer': correct_translation
+            'correct_answer': correct_translation,
+            'you_answered': True
         }, room=request.sid)
 
-        # Отправляем оппоненту, что он проиграл этот раунд
+        # Отправляем оппоненту, что раунд завершен правильным ответом соперника
         opponent = game['players'][0] if game['players'][1] == request.sid else game['players'][1]
         emit('answer_result', {
             'correct': False,
             'your_score': game['scores'][opponent],
             'opponent_score': game['scores'][request.sid],
-            'correct_answer': correct_translation
+            'correct_answer': correct_translation,
+            'you_answered': False
         }, room=opponent)
 
         # Выбираем новое слово
