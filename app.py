@@ -21,6 +21,26 @@ def get_words() -> Dict:
 # База данных слов: английское слово -> перевод
 WORDS = get_words()
 
+
+def generate_translations(word: str, num_options: int = 6) -> list[str]:
+    """Generate a list of unique translation options containing exactly one correct answer.
+
+    - Picks (num_options - 1) incorrect translations
+    - Adds the correct translation
+    - Shuffles the final list
+    """
+    correct_translation = WORDS[word]
+    all_translations = list(WORDS.values())
+    wrong_translations = [t for t in all_translations if t != correct_translation]
+    if num_options - 1 > len(wrong_translations):
+        # Fallback: limit to available wrong options
+        num_wrong = max(1, min(len(wrong_translations), num_options - 1))
+    else:
+        num_wrong = num_options - 1
+    options = random.sample(wrong_translations, num_wrong) + [correct_translation]
+    random.shuffle(options)
+    return options
+
 # Очередь ожидающих игроков
 waiting_players = []
 # Активные игры: room_id -> {'players': [player1, player2], 'word': word, 'translations': []}
@@ -70,14 +90,9 @@ def handle_find_game():
         join_room(room_id, player1)
         join_room(room_id, player2)
 
-        # Выбираем случайное слово
+        # Выбираем случайное слово и формируем 6 вариантов переводов
         word, translation = random.choice(list(WORDS.items()))
-        # Создаем варианты ответов
-        translations = list(random.sample(list(WORDS.values()), 10))
-        random.shuffle(translations)
-        if translation not in translations[:3]:
-            translations[3] = translation
-        random.shuffle(translations)
+        translations = generate_translations(word, num_options=6)
 
         game_data = {
             'players': [player1, player2],
@@ -190,11 +205,7 @@ def handle_answer(data):
         # Выбираем новое слово
         time.sleep(2)  # Пауза перед новым раундом
         word, translation = random.choice(list(WORDS.items()))
-        translations = list(random.sample(list(WORDS.values()), 10))
-        random.shuffle(translations)
-        if translation not in translations[:3]:
-            translations[3] = translation
-        random.shuffle(translations)
+        translations = generate_translations(word, num_options=6)
 
         game['word'] = word
         game['translations'] = translations
@@ -222,11 +233,7 @@ def handle_answer(data):
             game['round_over'] = True
             time.sleep(2)  # Пауза перед новым раундом
             word, translation = random.choice(list(WORDS.items()))
-            translations = list(random.sample(list(WORDS.values()), 10))
-            random.shuffle(translations)
-            if translation not in translations[:3]:
-                translations[3] = translation
-            random.shuffle(translations)
+            translations = generate_translations(word, num_options=6)
 
             game['word'] = word
             game['translations'] = translations
