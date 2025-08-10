@@ -83,7 +83,9 @@ def handle_find_game():
             'players': [player1, player2],
             'word': word,
             'translations': translations,
-            'scores': {player1: 0, player2: 0}
+            'scores': {player1: 0, player2: 0},
+            'answered': set(),
+            'round_over': False
         }
         active_games[room_id] = game_data
 
@@ -114,8 +116,22 @@ def handle_answer(data):
         return
 
     game = active_games[room_id]
+
+    # Инициализация полей состояния раунда на случай старых игр
+    if 'answered' not in game:
+        game['answered'] = set()
+    if 'round_over' not in game:
+        game['round_over'] = False
+
+    # Если раунд уже завершен, игнорируем новые ответы
+    if game.get('round_over'):
+        return
     word = game['word']
     correct_translation = WORDS[word]
+
+    # Блокируем повторные ответы одного игрока в рамках одного раунда
+    if request.sid in game['answered']:
+        return
 
     if data['answer'] == correct_translation:
         # Игрок ответил правильно
@@ -148,6 +164,9 @@ def handle_answer(data):
             print(f"Игра {room_id} удалена из активных игр")
             return
 
+        # Отмечаем, что раунд завершен победным ответом
+        game['round_over'] = True
+
         # Отправляем результат
         emit('answer_result', {
             'correct': True,
@@ -177,6 +196,8 @@ def handle_answer(data):
 
         game['word'] = word
         game['translations'] = translations
+        game['answered'] = set()
+        game['round_over'] = False
 
         # Отправляем новое слово обоим игрокам
         emit('new_round', {
@@ -185,6 +206,7 @@ def handle_answer(data):
         }, room=room_id)
     else:
         # Игрок ответил неправильно
+        game['answered'].add(request.sid)
         emit('answer_result', {
             'correct': False,
             'your_score': game['scores'][request.sid],
@@ -192,6 +214,27 @@ def handle_answer(data):
             game['scores'][game['players'][1]],
             'correct_answer': correct_translation
         }, room=request.sid)
+
+        # Если оба игрока ответили и никто не ответил правильно — начать новый раунд
+        if len(game['answered']) >= 2 and not game.get('round_over'):
+            game['round_over'] = True
+            time.sleep(2)  # Пауза перед новым раундом
+            word, translation = random.choice(list(WORDS.items()))
+            translations = list(random.sample(list(WORDS.values()), 10))
+            random.shuffle(translations)
+            if translation not in translations[:3]:
+                translations[3] = translation
+            random.shuffle(translations)
+
+            game['word'] = word
+            game['translations'] = translations
+            game['answered'] = set()
+            game['round_over'] = False
+
+            emit('new_round', {
+                'word': word,
+                'translations': translations
+            }, room=room_id)
 
 
 if __name__ == '__main__':
