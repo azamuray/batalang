@@ -213,7 +213,6 @@
 
       // Результат ответа
       socket.on('answer_result', (data) => {
-        if (!canAnswer) return;
         canAnswer = false;
 
         yourScoreSpan.textContent = data.your_score;
