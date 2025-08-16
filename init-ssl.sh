@@ -30,15 +30,19 @@ check_certificates() {
 get_certificates() {
     echo "Получение SSL сертификатов через certbot контейнер..."
     
-    # Используем docker-compose для запуска certbot
-    # Но сначала нужно убедиться, что мы в правильной директории
-    cd /app || {
-        echo "Ошибка: не удается перейти в директорию /app"
-        return 1
-    }
-    
-    # Запускаем certbot через docker-compose
-    docker-compose run --rm certbot || {
+    # Запускаем certbot контейнер напрямую через docker
+    docker run --rm \
+        --network english-battle_app-network \
+        --volumes-from english-battle_nginx_1 \
+        certbot/certbot \
+        certonly \
+        --webroot \
+        -w /var/www/certbot \
+        --email admin@batalang.ru \
+        -d batalang.ru \
+        --agree-tos \
+        --non-interactive \
+        --force-renewal || {
         echo "Ошибка получения сертификатов через certbot"
         return 1
     }
