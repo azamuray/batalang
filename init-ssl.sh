@@ -54,13 +54,19 @@ get_certificates() {
 switch_to_ssl() {
     echo "Переключение nginx на SSL конфигурацию..."
     
-    # Копируем SSL конфигурацию
+    # Копируем SSL конфигурацию (заменяем текущую)
     cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.backup
     cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf
     
     # Перезагружаем nginx
     echo "Перезагрузка nginx с SSL конфигурацией..."
-    curl -X POST http://nginx:80/nginx-reload || true
+    
+    # Используем docker exec для перезагрузки nginx
+    docker exec english-battle_nginx_1 nginx -s reload || {
+        echo "Ошибка перезагрузки nginx, пытаемся перезапустить контейнер..."
+        docker restart english-battle_nginx_1
+        sleep 5
+    }
     
     # Ждем немного для применения изменений
     sleep 3
