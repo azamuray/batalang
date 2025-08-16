@@ -30,38 +30,7 @@ check_certificates() {
 get_certificates() {
     echo "Получение SSL сертификатов..."
     
-    # Создаем временный nginx конфиг для веб-валидации
-    cat > /tmp/nginx-temp.conf << 'EOF'
-events {
-    worker_connections 1024;
-}
-
-http {
-    server {
-        listen 80;
-        server_name batalang.ru;
-        
-        location /.well-known/acme-challenge/ {
-            root /var/www/certbot;
-        }
-        
-        location / {
-            return 200 "OK";
-        }
-    }
-}
-EOF
-
-    # Копируем временный конфиг в nginx
-    cp /tmp/nginx-temp.conf /etc/nginx/nginx.conf
-    
-    # Перезагружаем nginx
-    echo "Перезагрузка nginx для веб-валидации..."
-    curl -X POST http://nginx:80/nginx-reload || true
-    
-    # Ждем немного
-    sleep 3
-    
+    # Nginx уже запущен с конфигурацией без SSL
     # Получаем сертификаты
     certbot certonly \
         --webroot \
@@ -78,9 +47,27 @@ EOF
     echo "Сертификаты успешно получены!"
 }
 
-# Функция для настройки cron для автоматического обновления
-setup_cron() {
-    echo "Настройка автоматического обновления сертификатов..."
+# Функция для переключения на SSL конфигурацию
+switch_to_ssl() {
+    echo "Переключение nginx на SSL конфигурацию..."
+    
+    # Копируем SSL конфигурацию
+    cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.backup
+    cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf
+    
+    # Перезагружаем nginx
+    echo "Перезагрузка nginx с SSL конфигурацией..."
+    curl -X POST http://nginx:80/nginx-reload || true
+    
+    # Ждем немного для применения изменений
+    sleep 3
+    
+    echo "Nginx переключен на SSL!"
+}
+
+# Функция для настройки автоматического обновления
+setup_auto_reload() {
+    echo "Настройка автоматической перезагрузки nginx..."
     
     # Создаем скрипт для обновления
     cat > /update-certs.sh << 'EOF'
@@ -92,21 +79,14 @@ EOF
     
     chmod +x /update-certs.sh
     
-    # Добавляем в crontab (если доступен)
-    if command -v crontab >/dev/null 2>&1; then
-        (crontab -l 2>/dev/null; echo "0 12 * * * /update-certs.sh") | crontab -
-        echo "Cron задача добавлена для обновления в 12:00 каждый день"
-    else
-        echo "Crontab недоступен, добавьте вручную:"
-        echo "0 12 * * * cd /path/to/project && docker-compose run --rm certbot renew --quiet && docker-compose exec nginx nginx -s reload"
-    fi
+    echo "Автоматическое обновление настроено!"
 }
 
 # Основная логика
 main() {
     echo "Начало автоматической настройки SSL..."
     
-    # Ждем готовности nginx
+    # Ждем готовности nginx (с конфигурацией без SSL)
     wait_for_nginx
     
     # Проверяем существующие сертификаты
@@ -115,7 +95,8 @@ main() {
         
         # Проверяем срок действия сертификатов
         if certbot certificates | grep -q "VALID"; then
-            echo "Сертификаты валидны, настройка завершена"
+            echo "Сертификаты валидны, переключаем на SSL..."
+            switch_to_ssl
             return 0
         else
             echo "Сертификаты истекли, обновляем..."
@@ -127,8 +108,11 @@ main() {
         echo "SSL настройка успешно завершена!"
         echo "Сайт доступен по адресу: https://batalang.ru"
         
+        # Переключаем на SSL конфигурацию
+        switch_to_ssl
+        
         # Настраиваем автоматическое обновление
-        setup_cron
+        setup_auto_reload
         
         return 0
     else
