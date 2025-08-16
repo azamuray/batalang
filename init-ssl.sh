@@ -26,21 +26,20 @@ check_certificates() {
     fi
 }
 
-# Функция для получения сертификатов
+# Функция для получения сертификатов через certbot контейнер
 get_certificates() {
-    echo "Получение SSL сертификатов..."
+    echo "Получение SSL сертификатов через certbot контейнер..."
     
-    # Nginx уже запущен с конфигурацией без SSL
-    # Получаем сертификаты
-    certbot certonly \
-        --webroot \
-        -w /var/www/certbot \
-        --email admin@batalang.ru \
-        -d batalang.ru \
-        --agree-tos \
-        --non-interactive \
-        --force-renewal || {
-        echo "Ошибка получения сертификатов"
+    # Используем docker-compose для запуска certbot
+    # Но сначала нужно убедиться, что мы в правильной директории
+    cd /app || {
+        echo "Ошибка: не удается перейти в директорию /app"
+        return 1
+    }
+    
+    # Запускаем certbot через docker-compose
+    docker-compose run --rm certbot || {
+        echo "Ошибка получения сертификатов через certbot"
         return 1
     }
     
@@ -94,7 +93,7 @@ main() {
         echo "Сертификаты уже настроены, проверяем валидность..."
         
         # Проверяем срок действия сертификатов
-        if certbot certificates | grep -q "VALID"; then
+        if [ -f "/etc/letsencrypt/live/batalang.ru/fullchain.pem" ]; then
             echo "Сертификаты валидны, переключаем на SSL..."
             switch_to_ssl
             return 0
